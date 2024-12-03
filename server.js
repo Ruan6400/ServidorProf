@@ -40,8 +40,8 @@ async function CriarBanco() {
             );
             CREATE TABLE IF NOT EXISTS arquivos(
                 id SERIAL PRIMARY KEY,
-                nome VARCHAR(50),
-                tipo  VARCHAR(10),
+                nome VARCHAR(100),
+                tipo  VARCHAR(50),
                 dados BYTEA,
                 professor_id INT NOT NULL,
                 CONSTRAINT fk_professor FOREIGN KEY (professor_id) REFERENCES professor(id)
@@ -53,17 +53,23 @@ async function CriarBanco() {
 }
 
 //Validar login
-app.post('/login',(req,res)=>{
+app.post('/login',async(req,res)=>{
     try{
         const {senha,nome} = req.body;
-        const consulta = pool.query("SELECT senha FROM professor WHERE nome = $1;",[nome]);
-        if(consulta.rows.length === 0 || consulta.rows[0].senha != senha){
-            res.send('<script>alert("Usuário ou senha incorretos")</script>')
+        const consulta = await pool.query("SELECT * FROM professor WHERE nome = $1;",[nome]);
+        if(consulta.rows.length === 0|| consulta.rows[0].senha != senha){
+            res.send(`
+                <script>
+                    window.location.assign("http://localhost:5500/erro.html")
+                </script>`)
         }else{
-            // nomeprof = consulta.rows[0].nome;
-            // idprof = consulta.rows[0].id;
+        	console.log(consulta.rows);
+		const dados = {nome:consulta.rows[0].nome,id:consulta.rows[0].id};
 
-            //na verdade as informações sobre o usuário não ficam aqui
+		res.send(`
+			<script>
+				window.location.assign("http://localhost:5500/paginaprof.html?id=${encodeURIComponent(JSON.stringify(dados))}")
+			</script>`)
         }
         
 
@@ -72,29 +78,41 @@ app.post('/login',(req,res)=>{
     }
 })
 
-//Salvar arquivos no banco de dados
-app.post('/upload',upload.single('file'),async (req,res)=>{
+app.post('/upload',upload.single('arquivo'),async (req,res)=>{
 
-    // //Verificar se foi realmente enviado um arquivo
-    // if (!req.file) {
-    //     return res.status(400).send('Nenhuma imagem foi enviada.');
-    // }
-
-    // try{
-    //     const {originalname,mimetype,buffer} = req.file;
-    //     //await pool.query('INSERT INTO ')
-    // }catch(erro){
-    //     console.error("Erro no banco de dados | "+erro);
-    // }
+    //Verificar se foi realmente enviado um arquivo
+    if (!req.file) {
+        return res.status(400).send('Nenhum arquivo foi enviado.');
+    }
+	const {originalname,mimetype,buffer} = req.file;
+	console.log(originalname);
+	console.log(mimetype);
+    try{
+        
+        const {id_professor} = req.body;
+        await pool.query('INSERT INTO arquivos (nome,tipo,dados,professor_id) values($1,$2,$3,$4)'
+        ,[originalname,mimetype,buffer,id_professor])
+        console.log('arquivo enviado')
+	res.send('seu arquivo foi enviado')
+    }catch(erro){
+        console.error("Erro no banco de dados | "+erro);
+    }
 })
 
-app.get('/download/:id',async (req,res)=>{
-    // Configurar o cabeçalho de resposta para download
-    // res.setHeader('Content-Disposition', `attachment; filename="${arquivo.nome_arquivo}"`);
-    // res.setHeader('Content-Type', arquivo.tipo_arquivo);
 
-    // // Enviar o arquivo
-    // res.send(arquivo.conteudo);
+app.get('/download/:id',async (req,res)=>{
+	const consulta = await pool.query('SELECT * FROM arquivos WHERE id = $1',[req.params.id]);
+	const arquivo = consulta.rows[0];
+	if(!arquivo){
+		console.log("não achei");
+		return res.status(400).send("O arquivo solicitado não foi encontrado");
+	}
+    // Configurar o cabeçalho de resposta para download
+    	 res.setHeader('Content-Disposition', `attachment; filename="${arquivo.nome}"`);
+    	 res.setHeader('Content-Type', arquivo.tipo);
+
+    	// Enviar o arquivo
+   	 res.send(arquivo.dados);
 })
 
 //Comando para criar a base de dados caso não exista
