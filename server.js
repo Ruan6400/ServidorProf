@@ -16,6 +16,15 @@ app.use(express.urlencoded({extended:true}));
 //armazenamento de arquivos em buffer para enviar
 const modoDeArmazenamento = multer.memoryStorage();
 const upload = multer({storage:modoDeArmazenamento});
+const tratalogin = multer();
+
+//preparando o servidor para requisições fetch
+app.use((req,res,next)=>{
+	res.header('Access-Control-Allow-Origin','*');
+	res.header('Access-Control-Allow-Methods','GET,POST');
+	res.header('Access-Control-Allow-Headers','Content-Type');
+	next();
+})
 
 //dados do banco ocultos por segurança
 const dadosBd = {
@@ -53,26 +62,18 @@ async function CriarBanco() {
 }
 
 //Validar login
-app.post('/login',async(req,res)=>{
+app.post('/login',tratalogin.none(),async(req,res)=>{
     try{
-        const {senha,nome} = req.body;
+	const {nome,senha} = req.body
         const consulta = await pool.query("SELECT * FROM professor WHERE nome = $1;",[nome]);
         if(consulta.rows.length === 0|| consulta.rows[0].senha != senha){
-            res.send(`
-                <script>
-                    window.location.assign("http://localhost:5500/erro.html")
-                </script>`)
+	    const erromsg = {message:"login ou senha incorretos"}
+            res.send(JSON.stringify(erromsg))
         }else{
         	console.log(consulta.rows);
 		const dados = {nome:consulta.rows[0].nome,id:consulta.rows[0].id};
-
-		res.send(`
-			<script>
-				window.location.assign("http://localhost:5500/paginaprof.html?id=${encodeURIComponent(JSON.stringify(dados))}")
-			</script>`)
+		res.send(JSON.stringify(dados));
         }
-        
-
     }catch(erro){
         console.error("Falha no login | "+erro);
     }
@@ -90,7 +91,7 @@ app.post('/upload',upload.single('arquivo'),async (req,res)=>{
     try{
         
         const {id_professor} = req.body;
-        await pool.query('INSERT INTO arquivos (nome,tipo,dados,professor_id) values($1,$2,$3,$4)'
+        await pool.query('INSERT INTO arquivos (nome,tipo,dados,professor_id,data_upload) values($1,$2,$3,$4,CURRENT_TIMESTAMP);'
         ,[originalname,mimetype,buffer,id_professor])
         console.log('arquivo enviado')
 	res.send('seu arquivo foi enviado')
@@ -113,6 +114,11 @@ app.get('/download/:id',async (req,res)=>{
 
     	// Enviar o arquivo
    	 res.send(arquivo.dados);
+})
+
+//listar os 5 ultimos arquivos
+app.get('/list',async (req,res)=>{
+	
 })
 
 //Comando para criar a base de dados caso não exista
