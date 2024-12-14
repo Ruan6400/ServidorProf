@@ -1,23 +1,16 @@
 const express = require('express');
 const path = require('path');
 const multer = require('multer');
-const {Pool} = require('pg');
+const {Pool,Client} = require('pg');
 require('dotenv').config();
 
-let idprof;
-let nomeprof;
+
 
 //criação do objeto que vai gerenciar as apis
 const app = express();
 
 //preparando o express para receber as informações de login
 app.use(express.urlencoded({extended:true}));
-
-//armazenamento de arquivos em buffer para enviar
-const modoDeArmazenamento = multer.memoryStorage();
-const upload = multer({storage:modoDeArmazenamento});
-const tratalogin = multer();
-
 //preparando o servidor para requisições fetch
 app.use((req,res,next)=>{
 	res.header('Access-Control-Allow-Origin','*');
@@ -25,6 +18,15 @@ app.use((req,res,next)=>{
 	res.header('Access-Control-Allow-Headers','Content-Type');
 	next();
 })
+
+
+
+//armazenamento de arquivos em buffer para enviar
+const modoDeArmazenamento = multer.memoryStorage();
+const upload = multer({storage:modoDeArmazenamento});
+const tratalogin = multer();
+
+
 
 //dados do banco ocultos por segurança
 const dadosBd = {
@@ -35,10 +37,27 @@ const dadosBd = {
     host:process.env.DB_HOST
 }
 
-//conexão ao banco de dados
-const pool = new Pool(dadosBd);
+//Criação do banco de dados
+async function CriaBanco() {
+    const cliente = new Client({
+        user:dadosBd.user,
+        password:dadosBd.password,
+        host:dadosBd.host,
+        port:dadosBd.port,
+    });
+    try{
+        await cliente.connect();
+        const consulta = await cliente.query('SELECT datname FROM pg_database');
+        const result = consulta.rows.filter(bd=>bd.datname == dadosBd.database)
+        if (result.length == 0)
+            await cliente.query('CREATE DATABASE adelia;')
+        await cliente.end();
 
-async function CriarBanco() {
+    }catch(erro){
+        console.error('Deu merda | ',erro)
+    }
+}
+async function CriarTabela() {
     console.log("conectando ao banco de dados...");
     try{
         await pool.query(`
@@ -61,6 +80,12 @@ async function CriarBanco() {
     }
 }
 
+
+
+
+
+
+/////////////APIs////////////////////
 //Validar login
 app.post('/login',tratalogin.none(),async(req,res)=>{
     try{
@@ -79,6 +104,7 @@ app.post('/login',tratalogin.none(),async(req,res)=>{
     }
 })
 
+//upload
 app.post('/upload',upload.single('arquivo'),async (req,res)=>{
 
     //Verificar se foi realmente enviado um arquivo
@@ -100,7 +126,7 @@ app.post('/upload',upload.single('arquivo'),async (req,res)=>{
     }
 })
 
-
+//download
 app.get('/download/:id',async (req,res)=>{
 	const consulta = await pool.query('SELECT * FROM arquivos WHERE id = $1',[req.params.id]);
 	const arquivo = consulta.rows[0];
@@ -117,13 +143,26 @@ app.get('/download/:id',async (req,res)=>{
 })
 
 //listar os 5 ultimos arquivos
-app.get('/list',async (req,res)=>{
-	
+app.get('/list/:id',async (req,res)=>{
+	const consulta = await pool.query('SELECT nome,id FROM arquivos WHERE professor_id = $1',[req.params.id])
+    const resultado = {array:consulta.rows}
+    console.log(resultado);
+    res.send(resultado)
 })
 
-//Comando para criar a base de dados caso não exista
-CriarBanco();
 
+
+
+
+
+//INICIALIZAR SQL
+//Comando para criar a base de dados caso não exista
+CriaBanco()
+const pool = new Pool(dadosBd);
+CriarTabela();
+
+
+//RODAR O SERVIDOR
 //comando para deixar o servidor ativo
 app.listen(3000,'0.0.0.0',()=>{
     console.log('Conexão bem sucedida');
