@@ -134,19 +134,20 @@ app.get('/download/:id',async (req,res)=>{
 		console.log("não achei");
 		return res.status(400).send("O arquivo solicitado não foi encontrado");
 	}
-    // Configurar o cabeçalho de resposta para download
+    // Configurar o cabeçalho de resposcd %SRV%
+    // ta para download
     	 res.setHeader('Content-Disposition', `attachment; filename="${arquivo.nome}"`);
     	 res.setHeader('Content-Type', arquivo.tipo);
 
     	// Enviar o arquivo
    	 res.send(arquivo.dados);
+     console.log('download feito')
 })
 
 //listar os 5 ultimos arquivos
 app.get('/list/:id',async (req,res)=>{
-	const consulta = await pool.query('SELECT nome,id FROM arquivos WHERE professor_id = $1',[req.params.id])
+	const consulta = await pool.query('SELECT nome,id FROM arquivos WHERE professor_id = $1 ORDER BY data_upload LIMIT 5;',[req.params.id])
     const resultado = {array:consulta.rows}
-    console.log(resultado);
     res.send(resultado)
 })
 
